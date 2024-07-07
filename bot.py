@@ -145,7 +145,7 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
 """, reply_markup=keyboard)
     elif callback_query.data == 'withdraw_funds':
         user = get_or_create_user(callback_query.from_user.id)
-        if user.balance >= 40.0:
+        if user.balance >= 4:
             await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.")
             await state.set_state(BotStates.SEND_PAYNAMENT_METHOD)
         else:
@@ -176,7 +176,7 @@ Pyramida Media.
 @dp.message_handler(content_types=types.ContentType.TEXT, state=BotStates.SEND_PAYNAMENT_METHOD)
 async def handle_withdrawal_details(message: types.Message, state: FSMContext):
     user = get_or_create_user(message.from_user.id)
-    if user.balance >= 40.0:
+    if user.balance >= 4:
         transaction = Transaction(user_id = message.from_id, description = 'Вивід коштів', amount = -40.00)
         session.add(transaction)
         session.commit()
