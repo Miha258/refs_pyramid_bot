@@ -9,6 +9,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 import pandas as pd
+import urllib.parse
 import sqlite3, os, dotenv
 
 dotenv.load_dotenv()
@@ -21,9 +22,6 @@ BOT_USERNAME = os.environ.get('BOT_USERNAME')
 TARGET_CHAT_ID = int(os.environ.get('TARGET_CHAT_ID'))
 
 bot = Bot(token=API_TOKEN)
-
-
-
 
 class BotStates(StatesGroup):
     SEND_PAYNAMENT_METHOD = State()
@@ -41,7 +39,16 @@ def get_menu_kb(referral_link=None):
         keyboard.add(InlineKeyboardButton("Стати партнером", callback_data='become_partner'))
     elif referral_link:
         keyboard.add(InlineKeyboardButton("Перевірити баланс", callback_data='update_balance'))
-        keyboard.add(InlineKeyboardButton("Запросити знайомих приєднатись", url="https://t.me/share/url?url=" + referral_link))
+        
+        
+        text = f"""
+Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
+Детальніше за посиланням:
+{referral_link}
+        """
+        encoded_text = urllib.parse.quote(text)
+        keyboard.add(InlineKeyboardButton("Запросити знайомих приєднатись", url=f"https://t.me/share/url?url={encoded_text}"))
         keyboard.add(InlineKeyboardButton("Вивід коштів", callback_data='withdraw_funds'))
     return keyboard
 
@@ -65,7 +72,7 @@ async def add_referral(referrer_id: int, new_user_id: int):
 async def distribute_bonus(user: User, level=1):
     if level > 8 or not user:
         return
-    user.balance += 4.0
+    user.balance += 40.00
     user.referrer_count += 1
     session.commit()
 
@@ -145,7 +152,7 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
 """, reply_markup=keyboard)
     elif callback_query.data == 'withdraw_funds':
         user = get_or_create_user(callback_query.from_user.id)
-        if user.balance >= 4:
+        if user.balance >= 40.00:
             await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.")
             await state.set_state(BotStates.SEND_PAYNAMENT_METHOD)
         else:
@@ -176,13 +183,15 @@ Pyramida Media.
 @dp.message_handler(content_types=types.ContentType.TEXT, state=BotStates.SEND_PAYNAMENT_METHOD)
 async def handle_withdrawal_details(message: types.Message, state: FSMContext):
     user = get_or_create_user(message.from_user.id)
-    if user.balance >= 4:
+    if user.balance >= 40.00:
         transaction = Transaction(user_id = message.from_id, description = 'Вивід коштів', amount = -40.00)
         session.add(transaction)
         session.commit()
+        
+        withdrawal_request = f"Користувач <strong>{message.from_user.mention}</strong> запросив вивід коштів.\nБаланс: {user.balance}\nРеквізити: {message.text}"
         user.balance = 0
         session.commit()
-        withdrawal_request = f"Користувач <strong>{message.from_user.mention}</strong> запросив вивід коштів. Реквізити:\n{message.text}"
+        
         await bot.send_message(ADMIN_ID, withdrawal_request, parse_mode=types.ParseMode.HTML)
         await bot.send_message(message.from_user.id, "Ваш запит на вивід коштів було відправлено адміністратору.")
     else:
@@ -202,7 +211,13 @@ async def successful_payment_handler(message: types.Message):
     user = get_or_create_user(message.from_id)
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(InlineKeyboardButton("Повернутись в особистий кабінет", callback_data='go_to_dashboard'))
-    keyboard.add(InlineKeyboardButton("Запросити знайомих приєднатись", url="https://t.me/share/url?url=" + user.referral_link))
+    text = f"""
+Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
+Детальніше за посиланням:
+{user.referral_link}"""
+    encoded_text = urllib.parse.quote(text)
+    keyboard.add(InlineKeyboardButton("Запросити знайомих приєднатись", url=f"https://t.me/share/url?url={encoded_text}"))
     
     transaction = Transaction(user_id = message.from_id, description = 'Оплата реферальної ситеми', amount = 40.00)
     session.add(transaction)
