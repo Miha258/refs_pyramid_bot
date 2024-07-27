@@ -12,12 +12,12 @@ import pandas as pd
 import urllib.parse
 import sqlite3, os, dotenv
 
+
 dotenv.load_dotenv()
 
 API_TOKEN = os.environ.get('API_TOKEN')
 PAYMENT_PROVIDER_TOKEN = os.environ.get('PAYMENT_PROVIDER_TOKEN')
 ADMIN_ID = int(os.environ.get('ADMIN_ID'))
-CHAT_LINK = os.environ.get('CHAT_LINK')
 BOT_USERNAME = os.environ.get('BOT_USERNAME')
 TARGET_CHAT_ID = int(os.environ.get('TARGET_CHAT_ID'))
 
@@ -32,11 +32,12 @@ dp.middleware.setup(LoggingMiddleware())
 
 logging.basicConfig(level=logging.INFO)
 
-def get_menu_kb(referral_link=None):
+def get_menu_kb(referral_link=None, invite_link=None):
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(InlineKeyboardButton("Як заробляє партнер каналу", callback_data='how_to_earn'))
     if not referral_link:
-        keyboard.add(InlineKeyboardButton("Стати партнером", callback_data='become_partner'))
+        keyboard.add(InlineKeyboardButton("Підпсиатися на канал", url=invite_link))
+        keyboard.add(InlineKeyboardButton("Провірити підписку", callback_data='check_subscription'))
     elif referral_link:
         keyboard.add(InlineKeyboardButton("Перевірити баланс", callback_data='update_balance'))
         
@@ -61,25 +62,26 @@ def get_or_create_user(telegram_id: int, username: str = None) -> User:
     return user
 
 async def add_referral(referrer_id: int, new_user_id: int):
-    referrer = get_or_create_user(referrer_id)
     new_user = get_or_create_user(new_user_id)
-    new_user.chat_link = CHAT_LINK
+    print(new_user)
     new_user.referral_link = f'https://t.me/{BOT_USERNAME}?start={new_user_id}'
     session.commit()
-    if referrer_id != new_user_id:
-        await distribute_bonus(referrer)
+    if referrer_id:
+        referrer = get_or_create_user(referrer_id)
+        if referrer_id != new_user_id:
+            await distribute_bonus(referrer)
 
 async def distribute_bonus(user: User, level=1):
     if level > 8 or not user:
         return
-    user.balance += 40.00
+    user.balance += 5.0
     user.referrer_count += 1
     session.commit()
 
-    transaction = Transaction(user_id = user.id, description = 'Начислення коштів за рефрала', amount = 4.0)
+    transaction = Transaction(user_id = user.id, description = 'Начислення коштів за рефрала', amount = 5.0)
     session.add(transaction)
     session.commit()
-    await bot.send_message(user.id, 'Вам було нараховано <strong>4.0 UAH</strong> за реферала', parse_mode=types.ParseMode.HTML)
+    await bot.send_message(user.id, 'Вам було нараховано <strong>5.0 UAH</strong> за реферала', parse_mode=types.ParseMode.HTML)
     if user.referrer:
         await distribute_bonus(user.referrer, level + 1)
 
@@ -88,93 +90,119 @@ async def send_welcome(message: types.Message):
     ref_start = message.text.split(" ")
     ref_id = int(ref_start[1]) if len(ref_start) == 2 else None
     user = get_or_create_user(message.from_id, message.from_user.mention)
+    if not user.chat_link:
+        invite = await bot.create_chat_invite_link(TARGET_CHAT_ID, member_limit=1)
+        user.chat_link = invite.invite_link
+        session.commit()
     if ref_id:
         if ref_id != message.from_id:
             user.referrer_id = ref_id
             session.commit()
+
     text = f"""
-Це ваш особистий кабінет.
-Тут ви можете стати партнером каналу 
-Pyramida Media. 
-Та заробляти разом з нами по системі багаторівневого маркетингу.
-Ви будете отримувати винагороду за кожного, 
-хто зареєструється в цьому кабінеті та стане нашим партнером, через ваше посилання, 
-та навіть за тих, хто зареєструється через 
-посилання ваших партнерів!
+Це ваш особистий кабінет
+Тут ви можете стати партнером та отримувати бонуси
 
 
-Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
+Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
 Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
-Ваше унікальне реферальне посилання: <strong>{user.referral_link if user.referral_link else '<b>немає</b>'}</strong>
-Ваше запрошення в чат: <strong>{user.chat_link if user.chat_link else '<b>немає</b>'}</strong>
+Ваше реферальне посилання:
+{user.referral_link}
+""" if user.referral_link else """
+Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
 """
-    await bot.send_message(
-        message.from_id,
+    await message.answer(
         text,
-        reply_markup=get_menu_kb(user.referral_link),
+        reply_markup=get_menu_kb(user.referral_link, user.chat_link),
         parse_mode=types.ParseMode.HTML
     )
 
-@dp.callback_query_handler(lambda c: c.data in ['become_partner', 'how_to_earn', 'withdraw_funds', 'update_balance'])
+@dp.callback_query_handler(lambda c: c.data in ['check_subscription',  'how_to_earn', 'become_partner', 'withdraw_funds', 'update_balance'])
 async def process_callback(callback_query: types.CallbackQuery, state: FSMContext):
-    if callback_query.data == 'become_partner':
+    message = callback_query.message
+    if callback_query.data == 'check_subscription':
         user = get_or_create_user(callback_query.from_user.id)
-        prices = [LabeledPrice(label='Підписка на канал', amount=4000)]
-        await bot.send_invoice(
-            callback_query.from_user.id,
-            title='Підписка на канал та реферальна система',
-            description='Оплата за підписку на канал та доступ до реферальної системи',
-            provider_token=PAYMENT_PROVIDER_TOKEN,
-            currency='UAH',
-            prices=prices,
-            start_parameter='subscribe',
-            payload=f'subscription-payment-{user.referrer_id or callback_query.from_user.id}'
-        )
+        if await bot.get_chat_member(TARGET_CHAT_ID, callback_query.from_user.id):
+            referrer_id = user.referrer_id
+            await add_referral(referrer_id, callback_query.from_user.id)
+            text = f"""
+Це ваш особистий кабінет
+Тут ви можете стати партнером та отримувати бонуси
+
+
+Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
+Ваше реферальне посилання:
+{user.referral_link}
+    """     
+            await message.answer(
+                text,
+                reply_markup=get_menu_kb(user.referral_link),
+                parse_mode=types.ParseMode.HTML
+            )
+        else:
+            text = f"""
+Ви не підписані, підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
+        """
+            await message.answer(text, reply_markup=get_menu_kb(invite_link=user.chat_link))
+    elif callback_query.data == 'become_partner':
+        await state.finish()
+        user = get_or_create_user(callback_query.from_user.id)
+        text = f"""
+Це ваш особистий кабінет
+Тут ви можете стати партнером та отримувати бонуси
+
+
+Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
+Ваше реферальне посилання:
+{user.referral_link}
+    """ if user.referral_link else """
+Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
+"""
+        await message.answer(
+            text,
+            reply_markup=get_menu_kb(user.referral_link, user.chat_link),
+            parse_mode=types.ParseMode.HTML
+        ) 
     elif callback_query.data == 'how_to_earn':
+        user = get_or_create_user(callback_query.from_user.id)
         keyboard = InlineKeyboardMarkup(row_width=1)
-        keyboard.add(InlineKeyboardButton("Стати партнером", callback_data='become_partner'))
+        keyboard.add(types.InlineKeyboardButton('Стати партнером' if not user.referral_link else 'Повернутися', callback_data='become_partner'))
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(callback_query.from_user.id, """Схема заробітку: 
 Як заробляє партнер каналу відправляє на повідомлення де розписана схема заробітку і є кнопка Стати партнером.
+                               
+1)Після повернення в особистий кабінет користувач бачить свій баланс, кількість рефералів та унікальне посилання для запрошення.
 
-1)Після натискання стати партнером зʼявляється повідомлення Оплатити 40грн посилання на оплату Likpay чи portmone.
+2)Коли хтось з його контактів, або контактів його контактів сплачує 40 грн, бот відправляє повідомлення: "У вас з'явився новий реферал", і користувач отримує 5 бали за кожного нового учасника.
 
-2)Людина сплачує 
-зʼявляється повідомлення Оплата пройшла успішно з кнопками
-Повернутись в особистий кабінет
-Запросити знайомих приєднатись.
-
-3)Після повернення в особистий кабінет людина бачить свій кабінет з балансом, кількістю рефералів та унікальним посиланням.
-
-4)Коли хтось з його контактів, або контактів його контактів сплачує 40грн йому бот відправляє повідомлення: У вас зявився   новий реферал. І рефер отримує 4 грн бонусів.
-
-5)Всі і рефер і реферали до 8 рівня отримують по 4грн за кожного нового учасника (реферала)
+3)Всі учасники, включаючи реферів та рефералів до 8 рівня, отримують по 5 бали за людину, яка увійде в канал по запрошеню (реферала).
 """, reply_markup=keyboard)
     elif callback_query.data == 'withdraw_funds':
         user = get_or_create_user(callback_query.from_user.id)
         if user.balance >= 40.00:
-            await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.")
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton('Повернутися', callback_data='become_partner'))
+            await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.", reply_markup=keyboard)
             await state.set_state(BotStates.SEND_PAYNAMENT_METHOD)
         else:
-            await bot.send_message(callback_query.from_user.id, "Ваш баланс менше 40 грн. Ви не можете вивести кошти.")
+            await bot.send_message(callback_query.from_user.id, "Ваш баланс менше 40 грн. Ви не можете вивести кошти.", reply_markup=keyboard)
     elif callback_query.data == 'update_balance':
         user = get_or_create_user(callback_query.from_user.id)
         try:
             await callback_query.message.edit_text(f"""
-Це ваш особистий кабінет.
-Тут ви можете стати партнером каналу 
-Pyramida Media. 
-Та заробляти разом з нами по системі багаторівневого маркетингу.
-Ви будете отримувати винагороду за кожного, 
-хто зареєструється в цьому кабінеті та стане нашим партнером, через ваше посилання, 
-та навіть за тих, хто зареєструється через 
-посилання ваших партнерів!
+Це ваш особистий кабінет
+Тут ви можете стати партнером та отримувати бонуси
 
 
-Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
+Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
 Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
-Ваше унікальне реферальне посилання: <strong>{user.referral_link if user.referral_link else '<b>немає</b>'}</strong>
-Ваше запрошення в чат: <strong>{user.chat_link if user.chat_link else '<b>немає</b>'}</strong>
+Ваше реферальне посилання:
+{user.referral_link}
             """, reply_markup=get_menu_kb(user.referral_link), parse_mode=types.ParseMode.HTML)
         except MessageNotModified:
             pass
@@ -182,6 +210,8 @@ Pyramida Media.
 
 @dp.message_handler(content_types=types.ContentType.TEXT, state=BotStates.SEND_PAYNAMENT_METHOD)
 async def handle_withdrawal_details(message: types.Message, state: FSMContext):
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton('Повернутися', callback_data='become_partner'))
     user = get_or_create_user(message.from_user.id)
     if user.balance >= 40.00:
         transaction = Transaction(user_id = message.from_id, description = 'Вивід коштів', amount = -40.00)
@@ -193,40 +223,11 @@ async def handle_withdrawal_details(message: types.Message, state: FSMContext):
         session.commit()
         
         await bot.send_message(ADMIN_ID, withdrawal_request, parse_mode=types.ParseMode.HTML)
-        await bot.send_message(message.from_user.id, "Ваш запит на вивід коштів було відправлено адміністратору.")
+        await bot.send_message(message.from_user.id, "Ваш запит на вивід коштів було відправлено адміністратору.", reply_markup=keyboard)
     else:
-        await bot.send_message(message.from_user.id, "Ваш баланс менше 40 грн. Ви не можете вивести кошти.")
+        await bot.send_message(message.from_user.id, "Ваш баланс менше 40 грн. Ви не можете вивести кошти.", reply_markup=keyboard)
     await state.finish()
 
-@dp.pre_checkout_query_handler(lambda query: True)
-async def pre_checkout_query_handler(pre_checkout_query: types.PreCheckoutQuery):
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
-async def successful_payment_handler(message: types.Message):
-    session.commit()
-    payload = message.successful_payment.invoice_payload
-    referrer_id = int(payload.split('-')[-1])
-    await add_referral(referrer_id, message.from_id)
-    user = get_or_create_user(message.from_id)
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(InlineKeyboardButton("Повернутись в особистий кабінет", callback_data='go_to_dashboard'))
-    text = f"""
-Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
-Запрошуйте ваших знайомих та заробляйте разом! 
-Детальніше за посиланням:
-{user.referral_link}"""
-    encoded_text = urllib.parse.quote(text)
-    keyboard.add(InlineKeyboardButton("Запросити знайомих приєднатись", url=f"https://t.me/share/url?url={encoded_text}"))
-    
-    transaction = Transaction(user_id = message.from_id, description = 'Оплата реферальної ситеми', amount = 40.00)
-    session.add(transaction)
-    session.commit()
-    await bot.send_message(
-        message.chat.id,
-        "Оплата пройшла успішно. Ваш баланс оновлено.",
-        reply_markup=keyboard
-    )
 
 @dp.callback_query_handler(lambda c: c.data == 'go_to_dashboard')
 async def go_to_dashboard(callback_query: types.CallbackQuery):
@@ -234,20 +235,14 @@ async def go_to_dashboard(callback_query: types.CallbackQuery):
     await bot.send_message(
         callback_query.from_user.id,
 f"""
-Це ваш особистий кабінет.
-Тут ви можете стати партнером каналу 
-Pyramida Media. 
-Та заробляти разом з нами по системі багаторівневого маркетингу.
-Ви будете отримувати винагороду за кожного, 
-хто зареєструється в цьому кабінеті та стане нашим партнером, через ваше посилання, 
-та навіть за тих, хто зареєструється через 
-посилання ваших партнерів!
+Це ваш особистий кабінет
+Тут ви можете стати партнером та отримувати бонуси
 
 
-Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
+Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
 Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
-Ваше унікальне реферальне посилання: <strong>{user.referral_link if user.referral_link else '<b>немає</b>'}</strong>
-Ваше запрошення в чат: <strong>{user.chat_link if user.chat_link else '<b>немає</b>'}</strong>
+Ваше реферальне посилання:
+{user.referral_link}
 """,
         reply_markup=get_menu_kb(user.referral_link),
         parse_mode=types.ParseMode.HTML
@@ -307,8 +302,20 @@ async def handle_export_db(message: types.Message):
         file = types.InputFile(excel_path)
         await bot.send_document(message.from_user.id, file)
     else:
-        await message.answer("У вас немає прав для виконання цієї команди.")
+        await message.answer("8У вас немає прав для виконання цієї команди.")
 
+@dp.message_handler(commands=['set_chat_id'])
+async def set_chat_id(message: types.Message):
+    if message.from_user.id == ADMIN_ID:
+        try:
+            chat_id = int(message.get_args())
+            global TARGET_CHAT_ID
+            TARGET_CHAT_ID = chat_id
+            await message.answer(f"TARGET_CHAT_ID has been set to {chat_id}.")
+        except ValueError:
+            await message.answer("Ви повинні ввести айді.")
+    else:
+        await message.answer("8У вас немає прав для виконання цієї команди.")
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
