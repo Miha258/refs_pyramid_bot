@@ -122,6 +122,7 @@ async def send_welcome(message: types.Message):
 async def process_callback(callback_query: types.CallbackQuery, state: FSMContext):
     message = callback_query.message
     if callback_query.data == 'check_subscription':
+        await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
         if await bot.get_chat_member(TARGET_CHAT_ID, callback_query.from_user.id):
             referrer_id = user.referrer_id
@@ -148,30 +149,22 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
         """
             await message.answer(text, reply_markup=get_menu_kb(invite_link=user.chat_link))
     elif callback_query.data == 'become_partner':
-        await state.finish()
+        await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
-        text = f"""
-Це ваш особистий кабінет
-Тут ви можете стати партнером та отримувати бонуси
-
-
-Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
-Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
-Ваше реферальне посилання:
-{user.referral_link}
-    """ if user.referral_link else """
-Привіт, підпишіться на Pyramida media та станьте партнером каналу. 
+        text = """
+Підпишіться на Pyramida media та станьте партнером каналу. 
 Запрошуйте ваших знайомих та заробляйте разом! 
 """
         await message.answer(
             text,
-            reply_markup=get_menu_kb(user.referral_link, user.chat_link),
+            reply_markup=get_menu_kb(invite_link=user.chat_link),
             parse_mode=types.ParseMode.HTML
         ) 
     elif callback_query.data == 'how_to_earn':
+        await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
         keyboard = InlineKeyboardMarkup(row_width=1)
-        keyboard.add(types.InlineKeyboardButton('Стати партнером' if not user.referral_link else 'Повернутися', callback_data='become_partner'))
+        keyboard.add(types.InlineKeyboardButton('Стати партнером' if not user.referral_link else 'Повернутися', callback_data='become_partner' if not user.referral_link else 'go_to_dashboard'))
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(callback_query.from_user.id, """Схема заробітку: 
 Як заробляє партнер каналу відправляє на повідомлення де розписана схема заробітку і є кнопка Стати партнером.
@@ -183,10 +176,11 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
 3)Всі учасники, включаючи реферів та рефералів до 8 рівня, отримують по 5 бали за людину, яка увійде в канал по запрошеню (реферала).
 """, reply_markup=keyboard)
     elif callback_query.data == 'withdraw_funds':
+        await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton('Повернутися', callback_data='go_to_dashboard'))
         if user.balance >= 40.00:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton('Повернутися', callback_data='become_partner'))
             await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.", reply_markup=keyboard)
             await state.set_state(BotStates.SEND_PAYNAMENT_METHOD)
         else:
@@ -208,8 +202,10 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
             pass
         await callback_query.answer('Баланс оновлено.', show_alert=True)
 
+
 @dp.message_handler(content_types=types.ContentType.TEXT, state=BotStates.SEND_PAYNAMENT_METHOD)
 async def handle_withdrawal_details(message: types.Message, state: FSMContext):
+    await message.delete()
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton('Повернутися', callback_data='become_partner'))
     user = get_or_create_user(message.from_user.id)
@@ -231,6 +227,7 @@ async def handle_withdrawal_details(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(lambda c: c.data == 'go_to_dashboard')
 async def go_to_dashboard(callback_query: types.CallbackQuery):
+    await callback_query.message.delete()
     user = get_or_create_user(callback_query.from_user.id)
     await bot.send_message(
         callback_query.from_user.id,
@@ -243,8 +240,11 @@ f"""
 Кількість Ваших рефералів: <strong>{user.referrer_count}</strong>
 Ваше реферальне посилання:
 {user.referral_link}
+""" if user.referral_link else """
+Підпишіться на Pyramida media та станьте партнером каналу. 
+Запрошуйте ваших знайомих та заробляйте разом! 
 """,
-        reply_markup=get_menu_kb(user.referral_link),
+        reply_markup=get_menu_kb(user.referral_link, user.chat_link),
         parse_mode=types.ParseMode.HTML
     )
 
