@@ -72,7 +72,7 @@ async def add_referral(referrer_id: int, new_user_id: int):
             await distribute_bonus(referrer)
 
 async def distribute_bonus(user: User, level=1):
-    if level > 8 or not user:
+    if level > 5 or not user:
         return
     user.balance += 5.0
     user.referrer_count += 1
@@ -244,7 +244,7 @@ f"""
 Підпишіться на Pyramida media та станьте партнером каналу. 
 Запрошуйте ваших знайомих та заробляйте разом! 
 """,
-        reply_markup=get_menu_kb(user.referral_link, user.chat_link),
+        reply_markup=get_menu_kb(user.referral_link, user.c),
         parse_mode=types.ParseMode.HTML
     )
 
@@ -302,7 +302,7 @@ async def handle_export_db(message: types.Message):
         file = types.InputFile(excel_path)
         await bot.send_document(message.from_user.id, file)
     else:
-        await message.answer("8У вас немає прав для виконання цієї команди.")
+        await message.answer("У вас немає прав для виконання цієї команди.")
 
 @dp.message_handler(commands=['set_chat_id'])
 async def set_chat_id(message: types.Message):
