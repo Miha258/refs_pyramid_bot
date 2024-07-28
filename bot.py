@@ -36,10 +36,10 @@ def get_menu_kb(referral_link=None, invite_link=None):
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(InlineKeyboardButton("💲 Как зарабатывает подписчик", callback_data='how_to_earn'))
     if not referral_link:
-        keyboard.add(InlineKeyboardButton("Подписаться на канал", url=invite_link))
-        keyboard.add(InlineKeyboardButton("Проверить подписку", callback_data='check_subscription'))
+        keyboard.add(InlineKeyboardButton("✔️ Подписаться на канал", url=invite_link))
+        keyboard.add(InlineKeyboardButton("🛃 Проверить подписку", callback_data='check_subscription'))
     elif referral_link:
-        keyboard.add(InlineKeyboardButton("Проверить/обновить баланс", callback_data='update_balance'))
+        keyboard.add(InlineKeyboardButton("💰 Проверить/обновить баланс", callback_data='update_balance'))
         
         
         text = f"""
@@ -49,8 +49,8 @@ def get_menu_kb(referral_link=None, invite_link=None):
 {referral_link}
         """
         encoded_text = urllib.parse.quote(text)
-        keyboard.add(InlineKeyboardButton("Пригласить знакомых", url=f"https://t.me/share/url?url={encoded_text}"))
-        keyboard.add(InlineKeyboardButton("Выплата денег", callback_data='withdraw_funds'))
+        keyboard.add(InlineKeyboardButton("🔗 Пригласить знакомых", url=f"https://t.me/share/url?url={encoded_text}"))
+        keyboard.add(InlineKeyboardButton("💲 Выплата денег", callback_data='withdraw_funds'))
     return keyboard
 
 def get_or_create_user(telegram_id: int, username: str = None) -> User:
@@ -77,10 +77,10 @@ async def distribute_bonus(user: User, level=1):
     user.referrer_count += 1
     session.commit()
 
-    transaction = Transaction(user_id = user.id, description = 'Начисление средств за подписчика', amount = 0.01)
+    transaction = Transaction(user_id = user.id, description = '💲 Начисление средств за подписчика', amount = 0.01)
     session.add(transaction)
     session.commit()
-    await bot.send_message(user.id, 'Вам было начислено <strong>0.01 USD</strong> за подписчика', parse_mode=types.ParseMode.HTML)
+    await bot.send_message(user.id, '💲 Вам было начислено <strong>0.01 USD</strong> за подписчика', parse_mode=types.ParseMode.HTML)
     if user.referrer:
         await distribute_bonus(user.referrer, level + 1)
 
@@ -103,7 +103,7 @@ async def send_welcome(message: types.Message):
 🤝 Тут Вы можете стать подписчиком канала и зарабатывать 💲 деньги, приглашая 🔗 друзей и знакомых.
 
 
-💰 Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+💰 Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
 👫 Количество Ваших подписчиков: <strong>{user.referrer_count}</strong>
 🔗 Ваша ссылка для приглашения знакомых:
 {user.referral_link}
@@ -124,7 +124,7 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
         await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
         text = f"""
-❌ Ви не подписаны на 🍿Пуфик ☁️ Кино, подпишитесь на 🍿Пуфик ☁️ Кино и зарабатывайте 💲. 
+❌ Вы не подписаны на 🍿Пуфик ☁️ Кино, подпишитесь на 🍿Пуфик ☁️ Кино и зарабатывайте 💲. 
 🔗 Приглашайте своих 👫 знакомых и зарабатывайте 💲 вместе! 
 """
         try:
@@ -137,7 +137,7 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
     🤝 Тут Вы можете стать подписчиком канала и зарабатывать 💲 деньги, приглашая 🔗 друзей и знакомых.
 
 
-    💰 Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+    💰 Ваш баланс: <strong>USD {user.balance:.2f}</strong>
     👫 Количество Ваших подписчиков: <strong>{user.referrer_count}</strong>
     🔗 Ваша ссылка для приглашения знакомых:
     {user.referral_link}
@@ -167,7 +167,7 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
         await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
         keyboard = InlineKeyboardMarkup(row_width=1)
-        keyboard.add(types.InlineKeyboardButton('Стать партнером' if not user.referral_link else 'Вернуться', callback_data='become_partner' if not user.referral_link else 'go_to_dashboard'))
+        keyboard.add(types.InlineKeyboardButton('🤝 Стать партнером' if not user.referral_link else '◀️ Вернуться', callback_data='become_partner' if not user.referral_link else 'go_to_dashboard'))
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(callback_query.from_user.id, """Как 💲 заработать: 
 1. Нажимаем "Пригласить знакомых" ✉️ Отправляем сообщение с приглашением подписаться на канал 🍿Пуфик ☁️ Кино.
@@ -184,12 +184,12 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
         await message.delete()
         user = get_or_create_user(callback_query.from_user.id)
         keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton('Вернуться', callback_data='go_to_dashboard'))
+        keyboard.add(types.InlineKeyboardButton('◀️ Вернуться', callback_data='go_to_dashboard'))
         if user.balance >= 10.00:
-            await bot.send_message(callback_query.from_user.id, "Будь ласка, надішліть свої реквізити для виводу коштів.", reply_markup=keyboard)
+            await bot.send_message(callback_query.from_user.id, "💳 Напишите свои реквизиты для выплаты денег", reply_markup=keyboard)
             await state.set_state(BotStates.SEND_PAYNAMENT_METHOD)
         else:
-            await bot.send_message(callback_query.from_user.id, "Ваш баланс менmше 10 USD. Ви не можете вивести кошти.", reply_markup=keyboard)
+            await bot.send_message(callback_query.from_user.id, "💰 Ваш баланс меньше 10 USD. Вы не можете вывести деньги.", reply_markup=keyboard)
     elif callback_query.data == 'update_balance':
         user = get_or_create_user(callback_query.from_user.id)
         try:
@@ -198,24 +198,24 @@ async def process_callback(callback_query: types.CallbackQuery, state: FSMContex
 🤝 Тут Вы можете стать подписчиком канала и зарабатывать 💲 деньги, приглашая 🔗 друзей и знакомых.
 
 
-💰 Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+💰 Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
 👫 Количество Ваших подписчиков: <strong>{user.referrer_count}</strong>
 🔗 Ваша ссылка для приглашения знакомых:
 {user.referral_link}
             """, reply_markup=get_menu_kb(user.referral_link), parse_mode=types.ParseMode.HTML)
         except MessageNotModified:
             pass
-        await callback_query.answer('Баланс обновлен', show_alert=True)
+        await callback_query.answer('💰 Баланс обновлен', show_alert=True)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT, state=BotStates.SEND_PAYNAMENT_METHOD)
 async def handle_withdrawal_details(message: types.Message, state: FSMContext):
     await message.delete()
     keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton('Вернуться', callback_data='become_partner'))
+    keyboard.add(types.InlineKeyboardButton('◀️ Вернуться', callback_data='become_partner'))
     user = get_or_create_user(message.from_user.id)
     if user.balance >= 10.00:
-        transaction = Transaction(user_id = message.from_id, description = 'Выплата денег', amount = user.balance)
+        transaction = Transaction(user_id = message.from_id, description = '💲 Выплата денег', amount = user.balance)
         session.add(transaction)
         session.commit()
         
@@ -224,9 +224,9 @@ async def handle_withdrawal_details(message: types.Message, state: FSMContext):
         session.commit()
         
         await bot.send_message(ADMIN_ID, withdrawal_request, parse_mode=types.ParseMode.HTML)
-        await bot.send_message(message.from_user.id, "Ваш запрос на выплату денег отправлен администратору.", reply_markup=keyboard)
+        await bot.send_message(message.from_user.id, "✉️ Ваш запрос на выплату денег отправлен администратору.", reply_markup=keyboard)
     else:
-        await bot.send_message(message.from_user.id, "Ваш баланс меньше 10 USD. Вы не можете вывести деньги.", reply_markup=keyboard)
+        await bot.send_message(message.from_user.id, "💰 Ваш баланс меньше 10 USD. Вы не можете вывести деньги.", reply_markup=keyboard)
     await state.finish()
 
 
@@ -241,7 +241,7 @@ f"""
 🤝 Тут Вы можете стать подписчиком канала и зарабатывать 💲 деньги, приглашая 🔗 друзей и знакомых.
 
 
-💰 Ваш баланс: <strong>UAH {user.balance:.2f} (бали нараховуються за запрошених знайомих, які підписались на канали (за кожний канал 5 балів). </strong>
+💰 Ваш баланс: <strong>UAH {user.balance:.2f}</strong>
 👫 Количество Ваших подписчиков: <strong>{user.referrer_count}</strong>
 🔗 Ваша ссылка для приглашения знакомых:
 {user.referral_link}
@@ -279,7 +279,7 @@ async def admin_stats(message: types.Message):
 
         await bot.send_message(message.from_user.id, stats_text, parse_mode = types.ParseMode.HTML)
     else:
-        await bot.send_message(message.from_user.id, "У вас нет прав для выполнения данной команды.")
+        await bot.send_message(message.from_user.id, "👮 У вас нет прав для выполнения данной команды.")
 
 def export_db_to_excel(db_path, excel_path):
     conn = sqlite3.connect(db_path)
@@ -307,7 +307,7 @@ async def handle_export_db(message: types.Message):
         file = types.InputFile(excel_path)
         await bot.send_document(message.from_user.id, file)
     else:
-        await message.answer("У вас нет прав для выполнения данной команды.")
+        await message.answer("👮 У вас нет прав для выполнения данной команды.")
 
 @dp.message_handler(commands=['set_chat_id'])
 async def set_chat_id(message: types.Message):
@@ -320,7 +320,7 @@ async def set_chat_id(message: types.Message):
         except ValueError:
             await message.answer("Вы должны ввести id")
     else:
-        await message.answer("У вас нет прав для выполнения данной команды.")
+        await message.answer("👮 У вас нет прав для выполнения данной команды.")
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
