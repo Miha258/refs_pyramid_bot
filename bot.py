@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.INFO)
 
 def get_menu_kb(referral_link=None, invite_link=None):
     keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(InlineKeyboardButton("Как зарабатывает подписчик", callback_data='how_to_earn'))
+    keyboard.add(InlineKeyboardButton("💲 Как зарабатывает подписчик", callback_data='how_to_earn'))
     if not referral_link:
         keyboard.add(InlineKeyboardButton("Подписаться на канал", url=invite_link))
         keyboard.add(InlineKeyboardButton("Проверить подписку", callback_data='check_subscription'))
