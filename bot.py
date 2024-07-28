@@ -63,7 +63,6 @@ def get_or_create_user(telegram_id: int, username: str = None) -> User:
 
 async def add_referral(referrer_id: int, new_user_id: int):
     new_user = get_or_create_user(new_user_id)
-    print(new_user)
     new_user.referral_link = f'https://t.me/{BOT_USERNAME}?start={new_user_id}'
     session.commit()
     if referrer_id:
@@ -244,7 +243,7 @@ f"""
 Підпишіться на Pyramida media та станьте партнером каналу. 
 Запрошуйте ваших знайомих та заробляйте разом! 
 """,
-        reply_markup=get_menu_kb(user.referral_link, user.c),
+        reply_markup=get_menu_kb(user.referral_link, user.chat_link),
         parse_mode=types.ParseMode.HTML
     )
 
